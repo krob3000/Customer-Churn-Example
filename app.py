@@ -134,11 +134,13 @@ if uploaded_file:
         st.pyplot(fig)
 
     #
+ 
     # -------------------------------
     # Prediction Input Section
     # -------------------------------
     st.subheader("🔮 Predict Churn for a New Customer")
     st.markdown("Enter customer details below:")
+
     # Collect user input for numeric features
     input_data = []
     for col in numeric_cols:
@@ -151,6 +153,7 @@ if uploaded_file:
         if col in filtered_df.columns:
             val = st.selectbox(f"{col}", options=filtered_df[col].unique())
             input_data.append(val)
+
     # Convert to DataFrame
     input_dict = {col: [val] for col, val in zip(numeric_cols + categorical_cols, input_data)}
     input_df = pd.DataFrame(input_dict)
@@ -175,6 +178,7 @@ if uploaded_file:
     if st.button("Predict Churn"):
         prediction_prob = model.predict_proba(input_scaled)[0][1]
         st.success(f"Predicted Churn Probability: {prediction_prob:.2%}")
+
 
 
     # -------------------------------
