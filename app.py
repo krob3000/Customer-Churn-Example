@@ -74,14 +74,18 @@ if uploaded_file:
     y = filtered_df['churn']
     X = pd.get_dummies(X, columns=[col for col in categorical_cols if col in X.columns], drop_first=True)
 
+ 
     # -------------------------------
-    # Load or Train Model
+    # Load or Train Model with Retrain Button
     # -------------------------------
-    if os.path.exists(MODEL_FILE) and os.path.exists(SCALER_FILE):
+    retrain = st.sidebar.button("🔄 Retrain Model")
+
+    if os.path.exists(MODEL_FILE) and os.path.exists(SCALER_FILE) and not retrain:
         model = joblib.load(MODEL_FILE)
         scaler = joblib.load(SCALER_FILE)
         st.success("✅ Loaded existing model and scaler.")
     else:
+        st.info("Training model... Please wait.")
         # Scale numeric features
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
@@ -92,105 +96,89 @@ if uploaded_file:
         model.fit(X_train, y_train)
 
         # Save model and scaler
-        
         joblib.dump(model, MODEL_FILE)
         joblib.dump(scaler, SCALER_FILE)
         joblib.dump(X.columns.tolist(), "model_columns.pkl")
         st.success("✅ Model trained and saved.")
 
-        # -------------------------------
-        # Model Performance
-        # -------------------------------
-        st.subheader("Model Performance")
-        accuracy = model.score(X_test, y_test)
-        st.metric("Model Accuracy", f"{accuracy:.2%}")
 
-        # Confusion Matrix
-        cm = confusion_matrix(y_test, model.predict(X_test))
-        fig, ax = plt.subplots()
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
-        ax.set_title('Confusion Matrix')
-        st.pyplot(fig)
-
-        # ROC Curve
-        y_prob = model.predict_proba(X_test)[:, 1]
-        fpr, tpr, _ = roc_curve(y_test, y_prob)
-        roc_auc = auc(fpr, tpr)
-        fig, ax = plt.subplots()
-        ax.plot(fpr, tpr, color='blue', label=f'AUC = {roc_auc:.2f}')
-        ax.plot([0, 1], [0, 1], color='gray', linestyle='--')
-        ax.set_title('ROC Curve')
-        ax.set_xlabel('False Positive Rate')
-        ax.set_ylabel('True Positive Rate')
-        ax.legend()
-        st.pyplot(fig)
-
-        # Feature Importance
-        st.subheader("Top Drivers of Churn")
-        coeffs = pd.Series(model.coef_[0], index=X.columns).sort_values(key=abs, ascending=False).head(10)
-        fig, ax = plt.subplots(figsize=(8, 6))
-        sns.barplot(x=coeffs.values, y=coeffs.index, palette='viridis', ax=ax)
-        ax.set_title('Top Drivers of Churn')
-        st.pyplot(fig)
-
-    #
- 
+       
+  # -------------------------------
+    # Model Performance Charts
     # -------------------------------
-    # Prediction Input Section
-    # -------------------------------
-    st.subheader("🔮 Predict Churn for a New Customer")
-    st.markdown("Enter customer details below:")
+    X_scaled = scaler.transform(X)
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
 
-    # Collect user input for numeric features
-    input_data = []
-    for col in numeric_cols:
-        if col in filtered_df.columns:
-            val = st.number_input(f"{col}", min_value=0.0, value=0.0)
-            input_data.append(val)
+    # ROC Curve
+    y_prob = model.predict_proba(X_test)[:, 1]
+    fpr, tpr, _ = roc_curve(y_test, y_prob)
+    roc_auc = auc(fpr, tpr)
+    fig_roc, ax = plt.subplots()
+    ax.plot(fpr, tpr, color='blue', label=f'AUC = {roc_auc:.2f}')
+    ax.plot([0, 1], [0, 1], color='gray', linestyle='--')
+    ax.set_title('ROC Curve')
+    ax.set_xlabel('False Positive Rate')
+    ax.set_ylabel('True Positive Rate')
+    ax.legend()
+    st.pyplot(fig_roc)
 
-    # Collect categorical inputs
-    for col in categorical_cols:
-        if col in filtered_df.columns:
-            val = st.selectbox(f"{col}", options=filtered_df[col].unique())
-            input_data.append(val)
-
-    # Convert to DataFrame
-    input_dict = {col: [val] for col, val in zip(numeric_cols + categorical_cols, input_data)}
-    input_df = pd.DataFrame(input_dict)
-
-    # One-hot encode categorical columns
-    input_df = pd.get_dummies(input_df, columns=[col for col in categorical_cols if col in input_df.columns], drop_first=True)
-
-    # Load model columns
-    model_columns = joblib.load("model_columns.pkl")
-
-    # Align columns with training data
-    for col in model_columns:
-        if col not in input_df.columns:
-            input_df[col] = 0
-
-    # Reorder columns to match training
-    input_df = input_df[model_columns]
-
-    # Scale numeric features
-    input_scaled = scaler.transform(input_df)
-
-    if st.button("Predict Churn"):
-        prediction_prob = model.predict_proba(input_scaled)[0][1]
-        st.success(f"Predicted Churn Probability: {prediction_prob:.2%}")
-
-
+    # Feature Importance
+    coeffs = pd.Series(model.coef_[0], index=X.columns).sort_values(key=abs, ascending=False).head(10)
+    fig_feat, ax = plt.subplots(figsize=(8, 6))
+    sns.barplot(x=coeffs.values, y=coeffs.index, palette='viridis', ax=ax)
+    ax.set_title('Top Drivers of Churn')
+    st.pyplot(fig_feat)
 
     # -------------------------------
-    # Recommendations
+    # Generate PDF Report
     # -------------------------------
-    st.subheader("✅ Recommendations to Reduce Churn")
-    st.markdown("""
-    1. **Improve Customer Support** – Reduce resolution time and handle escalations proactively.
-    2. **Enhance Engagement** – Increase monthly logins and weekly active days with loyalty programs.
-    3. **Address Payment Issues** – Implement automated retry and flexible payment options.
-    4. **Monitor Price Sensitivity** – Communicate value clearly when increasing prices.
-    5. **Boost Satisfaction & NPS** – Act on feedback and improve product experience.
-    """)
+    if st.button("📄 Download Polished PDF Report"):
+        buffer = io.BytesIO()
+        c = canvas.Canvas(buffer, pagesize=letter)
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(50, 750, "Customer Churn Report")
+        c.setFont("Helvetica", 12)
+        c.drawString(50, 720, f"Overall Churn Rate: {churn_rate:.1%}")
+        c.drawString(50, 700, f"Total Customers: {len(filtered_df):,}")
+        c.drawString(50, 670, "Key Recommendations:")
+        recommendations = [
+            "Improve Customer Support",
+            "Enhance Engagement",
+            "Address Payment Issues",
+            "Monitor Price Sensitivity",
+            "Boost Satisfaction & NPS"
+        ]
+        y = 650
+        for rec in recommendations:
+            c.drawString(70, y, f"- {rec}")
+            y -= 20
+
+        # Save charts as images and embed
+        img_buffer_cat = io.BytesIO()
+        if fig_cat:
+            fig_cat.savefig(img_buffer_cat, format='PNG')
+            img_buffer_cat.seek(0)
+            c.drawImage(img_buffer_cat, 50, 400, width=250, height=150)
+
+        img_buffer_roc = io.BytesIO()
+        fig_roc.savefig(img_buffer_roc, format='PNG')
+        img_buffer_roc.seek(0)
+        c.drawImage(img_buffer_roc, 320, 400, width=250, height=150)
+
+        img_buffer_feat = io.BytesIO()
+        fig_feat.savefig(img_buffer_feat, format='PNG')
+        img_buffer_feat.seek(0)
+        c.drawImage(img_buffer_feat, 50, 200, width=500, height=150)
+
+        c.showPage()
+        c.save()
+        buffer.seek(0)
+
+        st.download_button(
+            label="Download Report",
+            data=buffer,
+            file_name="Customer_Churn_Report.pdf",
+            mime="application/pdf"
+        )
 else:
     st.info("Please upload a CSV file to start.")
