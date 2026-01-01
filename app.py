@@ -9,6 +9,7 @@ from sklearn.metrics import confusion_matrix, roc_curve, auc
 from sklearn.preprocessing import StandardScaler
 import joblib
 import os
+import io
 
 # -------------------------------
 # Page Config
