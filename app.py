@@ -133,14 +133,31 @@ if uploaded_file:
         ax.set_title('Top Drivers of Churn')
         st.pyplot(fig)
 
+    #
     # -------------------------------
     # Prediction Input Section
     # -------------------------------
     st.subheader("🔮 Predict Churn for a New Customer")
     st.markdown("Enter customer details below:")
-
     # Collect user input for numeric features
-    
+    input_data = []
+    for col in numeric_cols:
+        if col in filtered_df.columns:
+            val = st.number_input(f"{col}", min_value=0.0, value=0.0)
+            input_data.append(val)
+
+    # Collect categorical inputs
+    for col in categorical_cols:
+        if col in filtered_df.columns:
+            val = st.selectbox(f"{col}", options=filtered_df[col].unique())
+            input_data.append(val)
+    # Convert to DataFrame
+    input_dict = {col: [val] for col, val in zip(numeric_cols + categorical_cols, input_data)}
+    input_df = pd.DataFrame(input_dict)
+
+    # One-hot encode categorical columns
+    input_df = pd.get_dummies(input_df, columns=[col for col in categorical_cols if col in input_df.columns], drop_first=True)
+
     # Load model columns
     model_columns = joblib.load("model_columns.pkl")
 
@@ -155,10 +172,9 @@ if uploaded_file:
     # Scale numeric features
     input_scaled = scaler.transform(input_df)
 
-if st.button("Predict Churn"):
-    prediction_prob = model.predict_proba(input_scaled)[0][1]
-    st.success(f"Predicted Churn Probability: {prediction_prob:.2%}")
-
+    if st.button("Predict Churn"):
+        prediction_prob = model.predict_proba(input_scaled)[0][1]
+        st.success(f"Predicted Churn Probability: {prediction_prob:.2%}")
 
 
     # -------------------------------
