@@ -80,22 +80,35 @@ if uploaded_file:
     X = pd.get_dummies(X, columns=[col for col in categorical_cols if col in X.columns], drop_first=True)
 
  
-    # -------------------------------
-    # Load or Train Model with Retrain Button
-    # -------------------------------
-    retrain = st.sidebar.button("🔄 Retrain Model")
+    
+# -------------------------------
+# Load or Train Model with Retrain Button
+# -------------------------------
+st.sidebar.subheader("Model Options")
+retrain = st.sidebar.button("🔄 Retrain Model")
 
-    if os.path.exists(MODEL_FILE) and os.path.exists(SCALER_FILE) and not retrain:
+if retrain:
+    st.info("Retraining model... Please wait.")
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
+    model = LogisticRegression(max_iter=1000)
+    model.fit(X_train, y_train)
+
+    # Save model and scaler
+    joblib.dump(model, MODEL_FILE)
+    joblib.dump(scaler, SCALER_FILE)
+    joblib.dump(X.columns.tolist(), "model_columns.pkl")
+    st.success("✅ Model retrained and saved.")
+else:
+    if os.path.exists(MODEL_FILE) and os.path.exists(SCALER_FILE):
         model = joblib.load(MODEL_FILE)
         scaler = joblib.load(SCALER_FILE)
         st.success("✅ Loaded existing model and scaler.")
     else:
-        st.info("Training model... Please wait.")
-        # Scale numeric features
+        st.info("Training model for the first time...")
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
-
-        # Train model
         X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
         model = LogisticRegression(max_iter=1000)
         model.fit(X_train, y_train)
@@ -105,7 +118,6 @@ if uploaded_file:
         joblib.dump(scaler, SCALER_FILE)
         joblib.dump(X.columns.tolist(), "model_columns.pkl")
         st.success("✅ Model trained and saved.")
-
 
        
   # -------------------------------
