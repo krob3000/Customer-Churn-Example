@@ -10,6 +10,10 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 import os
 import io
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from io import BytesIO
+
 
 # -------------------------------
 # Page Config
