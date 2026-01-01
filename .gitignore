@@ -1,0 +1,37 @@
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Streamlit cache
+.streamlit/
+
+# Logs
+*.log
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Large datasets
+*.csv
+*.xlsx
+*.json
+
+# Temporary files
+*.tmp
+*.bak
+
+# IDE settings
+.vscode/
+.idea/
