@@ -1,18 +1,59 @@
-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import confusion_matrix, roc_curve, auc
+from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import StandardScaler
 import joblib
 import os
 import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-from io import BytesIO
+from reportlab.lib.utils import ImageReader
+
+# -------------------------------
+# PDF Helper Functions
+# -------------------------------
+
+def draw_chart(
+    canvas,
+    fig,
+    x=None,
+    y=500,
+    max_width=500,
+    max_height=200,
+    page_width=letter[0]
+):
+    if fig is None:
+        return y
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="PNG", bbox_inches="tight", dpi=150)
+    buf.seek(0)
+
+    img = ImageReader(buf)
+    img_width, img_height = img.getSize()
+
+    scale = min(max_width / img_width, max_height / img_height)
+    draw_width = img_width * scale
+    draw_height = img_height * scale
+
+    if x is None:
+        x = (page_width - draw_width) / 2
+
+    canvas.drawImage(img, x, y, width=draw_width, height=draw_height)
+    return y - draw_height - 30
+
+
+def ensure_page_space(canvas, y, min_y=100):
+    if y < min_y:
+        canvas.showPage()
+        canvas.setFont("Helvetica", 12)
+        return 750
+    return y
+
 
 # -------------------------------
 # Page Config
@@ -136,53 +177,57 @@ if uploaded_file:
     # -------------------------------
     # Generate PDF Report
     # -------------------------------
-    if st.button("📄 Download Polished PDF Report"):
-        buffer = io.BytesIO()
-        c = canvas.Canvas(buffer, pagesize=letter)
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(50, 750, "Customer Churn Report")
-        c.setFont("Helvetica", 12)
-        c.drawString(50, 720, f"Overall Churn Rate: {churn_rate:.1%}")
-        c.drawString(50, 700, f"Total Customers: {len(filtered_df):,}")
-        c.drawString(50, 670, "Key Recommendations:")
-        recommendations = [
-            "Improve Customer Support",
-            "Enhance Engagement",
-            "Address Payment Issues",
-            "Monitor Price Sensitivity",
-            "Boost Satisfaction & NPS"
-        ]
-        y = 650
-        for rec in recommendations:
-            c.drawString(70, y, f"- {rec}")
-            y -= 20
+    # -------------------------------
+# Generate PDF Report
+# -------------------------------
+if st.button("📄 Download Polished PDF Report"):
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
 
-        # Save charts as images and embed
-        img_buffer_cat = io.BytesIO()
-        if fig_cat is not None:
-            fig_cat.savefig(img_buffer_cat, format='PNG')
-            img_buffer_cat.seek(0)
-            c.drawImage(img_buffer_cat, 50, 400, width=250, height=150)
+    page_width, page_height = letter
+    y = 750
 
-        img_buffer_roc = io.BytesIO()
-        fig_roc.savefig(img_buffer_roc, format='PNG')
-        img_buffer_roc.seek(0)
-        c.drawImage(img_buffer_roc, 320, 400, width=250, height=150)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(50, y, "Customer Churn Report")
+    y -= 30
 
-        img_buffer_feat = io.BytesIO()
-        fig_feat.savefig(img_buffer_feat, format='PNG')
-        img_buffer_feat.seek(0)
-        c.drawImage(img_buffer_feat, 50, 200, width=500, height=150)
+    c.setFont("Helvetica", 12)
+    c.drawString(50, y, f"Overall Churn Rate: {churn_rate:.1%}")
+    y -= 20
+    c.drawString(50, y, f"Total Customers: {len(filtered_df):,}")
+    y -= 30
 
-        c.showPage()
-        c.save()
-        buffer.seek(0)
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(50, y, "Key Recommendations:")
+    y -= 20
 
-        st.download_button(
-            label="Download Report",
-            data=buffer,
-            file_name="Customer_Churn_Report.pdf",
-            mime="application/pdf"
-        )
-else:
-    st.info("Please upload a CSV file to start.")
+    c.setFont("Helvetica", 12)
+    recommendations = [
+        "Improve Customer Support",
+        "Enhance Engagement",
+        "Address Payment Issues",
+        "Monitor Price Sensitivity",
+        "Boost Satisfaction & NPS"
+    ]
+
+    for rec in recommendations:
+        y = ensure_page_space(c, y)
+        c.drawString(70, y, f"- {rec}")
+        y -= 18
+
+    y -= 30
+    y = ensure_page_space(c, y)
+
+    y = draw_chart(c, fig_cat, y=y, max_width=260, max_height=160)
+    y = draw_chart(c, fig_roc, y=y, max_width=260, max_height=160)
+    y = draw_chart(c, fig_feat, y=y, max_width=500, max_height=200)
+
+    c.save()
+    buffer.seek(0)
+
+    st.download_button(
+        label="Download Report",
+        data=buffer,
+        file_name="Customer_Churn_Report.pdf",
+        mime="application/pdf"
+    )
