@@ -14,7 +14,6 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from io import BytesIO
 
-
 # -------------------------------
 # Page Config
 # -------------------------------
@@ -24,6 +23,9 @@ uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
 
 MODEL_FILE = "trained_churn_model.pkl"
 SCALER_FILE = "scaler.pkl"
+
+# Initialize fig_cat to avoid NameError
+fig_cat = None
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
@@ -59,11 +61,11 @@ if uploaded_file:
     selected_col = st.selectbox("Select a categorical column", [col for col in categorical_cols if col in filtered_df.columns])
     if selected_col:
         churn_by_cat = filtered_df.groupby(selected_col)['churn'].mean().sort_values(ascending=False)
-        fig, ax = plt.subplots(figsize=(6, 4))
+        fig_cat, ax = plt.subplots(figsize=(6, 4))
         churn_by_cat.plot(kind='bar', color='skyblue', ax=ax)
         ax.set_ylabel('Churn Rate')
         ax.set_title(f'Churn Rate by {selected_col}')
-        st.pyplot(fig)
+        st.pyplot(fig_cat)
 
     # -------------------------------
     # Prepare Data for Model
@@ -79,7 +81,6 @@ if uploaded_file:
     y = filtered_df['churn']
     X = pd.get_dummies(X, columns=[col for col in categorical_cols if col in X.columns], drop_first=True)
 
- 
     # -------------------------------
     # Load or Train Model with Retrain Button
     # -------------------------------
@@ -158,7 +159,7 @@ if uploaded_file:
 
         # Save charts as images and embed
         img_buffer_cat = io.BytesIO()
-        if fig_cat:
+        if fig_cat is not None:
             fig_cat.savefig(img_buffer_cat, format='PNG')
             img_buffer_cat.seek(0)
             c.drawImage(img_buffer_cat, 50, 400, width=250, height=150)
