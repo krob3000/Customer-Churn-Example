@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -17,15 +18,8 @@ from reportlab.lib.utils import ImageReader
 # PDF Helper Functions
 # -------------------------------
 
-def draw_chart(
-    canvas,
-    fig,
-    x=None,
-    y=500,
-    max_width=500,
-    max_height=200,
-    page_width=letter[0]
-):
+def draw_chart(canvas, fig, x=None, y=500, max_width=500, max_height=200, page_width=letter[0]):
+    """Draw a matplotlib figure on the PDF canvas."""
     if fig is None:
         return y
 
@@ -48,12 +42,12 @@ def draw_chart(
 
 
 def ensure_page_space(canvas, y, min_y=100):
+    """Ensure enough space on the page; create a new page if needed."""
     if y < min_y:
         canvas.showPage()
         canvas.setFont("Helvetica", 12)
         return 750
     return y
-
 
 # -------------------------------
 # Page Config
@@ -65,8 +59,10 @@ uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
 MODEL_FILE = "trained_churn_model.pkl"
 SCALER_FILE = "scaler.pkl"
 
-# Initialize fig_cat to avoid NameError
+# Initialize chart variables
 fig_cat = None
+fig_roc = None
+fig_feat = None
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
@@ -152,82 +148,3 @@ if uploaded_file:
     # Model Performance Charts
     # -------------------------------
     X_scaled = scaler.transform(X)
-    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
-
-    # ROC Curve
-    y_prob = model.predict_proba(X_test)[:, 1]
-    fpr, tpr, _ = roc_curve(y_test, y_prob)
-    roc_auc = auc(fpr, tpr)
-    fig_roc, ax = plt.subplots()
-    ax.plot(fpr, tpr, color='blue', label=f'AUC = {roc_auc:.2f}')
-    ax.plot([0, 1], [0, 1], color='gray', linestyle='--')
-    ax.set_title('ROC Curve')
-    ax.set_xlabel('False Positive Rate')
-    ax.set_ylabel('True Positive Rate')
-    ax.legend()
-    st.pyplot(fig_roc)
-
-    # Feature Importance
-    coeffs = pd.Series(model.coef_[0], index=X.columns).sort_values(key=abs, ascending=False).head(10)
-    fig_feat, ax = plt.subplots(figsize=(8, 6))
-    sns.barplot(x=coeffs.values, y=coeffs.index, palette='viridis', ax=ax)
-    ax.set_title('Top Drivers of Churn')
-    st.pyplot(fig_feat)
-
-    # -------------------------------
-    # Generate PDF Report
-    # -------------------------------
-    # -------------------------------
-# Generate PDF Report
-# -------------------------------
-if st.button("📄 Download Polished PDF Report"):
-    buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
-
-    page_width, page_height = letter
-    y = 750
-
-    c.setFont("Helvetica-Bold", 18)
-    c.drawString(50, y, "Customer Churn Report")
-    y -= 30
-
-    c.setFont("Helvetica", 12)
-    c.drawString(50, y, f"Overall Churn Rate: {churn_rate:.1%}")
-    y -= 20
-    c.drawString(50, y, f"Total Customers: {len(filtered_df):,}")
-    y -= 30
-
-    c.setFont("Helvetica-Bold", 13)
-    c.drawString(50, y, "Key Recommendations:")
-    y -= 20
-
-    c.setFont("Helvetica", 12)
-    recommendations = [
-        "Improve Customer Support",
-        "Enhance Engagement",
-        "Address Payment Issues",
-        "Monitor Price Sensitivity",
-        "Boost Satisfaction & NPS"
-    ]
-
-    for rec in recommendations:
-        y = ensure_page_space(c, y)
-        c.drawString(70, y, f"- {rec}")
-        y -= 18
-
-    y -= 30
-    y = ensure_page_space(c, y)
-
-    y = draw_chart(c, fig_cat, y=y, max_width=260, max_height=160)
-    y = draw_chart(c, fig_roc, y=y, max_width=260, max_height=160)
-    y = draw_chart(c, fig_feat, y=y, max_width=500, max_height=200)
-
-    c.save()
-    buffer.seek(0)
-
-    st.download_button(
-        label="Download Report",
-        data=buffer,
-        file_name="Customer_Churn_Report.pdf",
-        mime="application/pdf"
-    )
