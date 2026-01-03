@@ -1,4 +1,26 @@
 
+echo "*.pkl
+__pycache__/
+.env
+*.log
+*.DS_Store
+*.sqlite3
+AppData/
+Contacts/
+Desktop/
+Documents/
+Downloads/
+Favorites/
+Links/
+Music/
+OneDrive/
+Pictures/
+Saved Games/
+Searches/
+Videos/
+NTUSER*
+" > .gitignore
+
 # Python cache
 __pycache__/
 *.pyc
