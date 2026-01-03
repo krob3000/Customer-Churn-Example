@@ -65,6 +65,15 @@ def train_model(X, y):
     model.fit(X_train, y_train)
     return model, scaler
 
+# Recommendations
+recommendations = [
+    "1. Improve onboarding experience to reduce early churn.",
+    "2. Offer personalized discounts or loyalty programs for at-risk customers.",
+    "3. Enhance customer support responsiveness and resolution times.",
+    "4. Monitor and optimize product usage patterns to increase engagement.",
+    "5. Implement proactive outreach for customers showing declining activity."
+]
+
 # Initialize chart variables
 fig_cat = None
 fig_roc = None
@@ -88,13 +97,13 @@ if uploaded_file:
         filtered_df = filtered_df[filtered_df['gender'].isin(gender_filter)]
 
     # -------------------------------
-    # Overview Metrics
+    # KPI Cards
     # -------------------------------
-    st.subheader("Overview")
     churn_rate = filtered_df['churn'].mean()
-    col1, col2 = st.columns(2)
-    col1.metric("Overall Churn Rate", f"{churn_rate:.1%}")
-    col2.metric("Total Customers", f"{len(filtered_df):,}")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Churn Rate", f"{churn_rate:.1%}")
+    col2.metric("Active Customers", f"{len(filtered_df):,}")
+    col3.metric("MRR", "$50,000")  # Placeholder for Monthly Recurring Revenue
 
     # -------------------------------
     # Churn by Category
@@ -132,7 +141,7 @@ if uploaded_file:
     st.success("✅ Model trained successfully.")
 
     # -------------------------------
-    # Model Performance Charts
+    # ROC Curve
     # -------------------------------
     X_scaled = scaler.transform(X)
     y_pred_prob = model.predict_proba(X_scaled)[:, 1]
@@ -147,7 +156,7 @@ if uploaded_file:
     st.pyplot(fig_roc)
 
     # -------------------------------
-    # Feature Importance Chart
+    # Feature Importance
     # -------------------------------
     try:
         feature_importance = abs(model.coef_[0])
@@ -161,9 +170,16 @@ if uploaded_file:
         st.warning("Feature importance chart could not be generated.")
 
     # -------------------------------
+    # Recommendations Section
+    # -------------------------------
+    st.subheader("Recommendations to Reduce Churn")
+    for rec in recommendations:
+        st.write(f"✅ {rec}")
+
+    # -------------------------------
     # Enhanced PDF Report
     # -------------------------------
-    st.subheader("Download Enhanced Report")
+    st.subheader("Download Full Report with Recommendations")
 
     buf = io.BytesIO()
     pdf = canvas.Canvas(buf, pagesize=letter)
@@ -208,11 +224,22 @@ if uploaded_file:
         y_pos -= 30
         y_pos = draw_chart(pdf, fig_feat, y=y_pos)
 
+    pdf.showPage()
+
+    # Recommendations Page
+    pdf.setFont("Helvetica-Bold", 18)
+    pdf.drawString(50, 750, "Recommendations to Reduce Churn")
+    pdf.setFont("Helvetica", 12)
+    y_pos = 720
+    for rec in recommendations:
+        pdf.drawString(50, y_pos, rec)
+        y_pos -= 20
+
     pdf.save()
 
     st.download_button(
-        label="📥 Download Enhanced PDF Report",
+        label="📥 Download Full PDF Report",
         data=buf.getvalue(),
-        file_name="enhanced_churn_report.pdf",
+        file_name="churn_report_with_recommendations.pdf",
         mime="application/pdf"
     )
