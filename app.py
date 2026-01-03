@@ -7,8 +7,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import StandardScaler
-import joblib
-import os
 import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -17,26 +15,33 @@ from reportlab.lib.utils import ImageReader
 # -------------------------------
 # PDF Helper Functions
 # -------------------------------
-def draw_chart(canvas, fig, x=None, y=500, max_width=500, max_height=200, page_width=letter[0]):
+def draw_chart(pdf_canvas, fig, x=None, y=500, max_width=500, max_height=200, page_width=letter[0]):
+    """Draw a matplotlib figure on the PDF canvas."""
     if fig is None:
         return y
+
     buf = io.BytesIO()
     fig.savefig(buf, format="PNG", bbox_inches="tight", dpi=150)
     buf.seek(0)
+
     img = ImageReader(buf)
     img_width, img_height = img.getSize()
+
     scale = min(max_width / img_width, max_height / img_height)
     draw_width = img_width * scale
     draw_height = img_height * scale
+
     if x is None:
         x = (page_width - draw_width) / 2
-    canvas.drawImage(img, x, y, width=draw_width, height=draw_height)
+
+    pdf_canvas.drawImage(img, x, y, width=draw_width, height=draw_height)
     return y - draw_height - 30
 
-def ensure_page_space(canvas, y, min_y=100):
+def ensure_page_space(pdf_canvas, y, min_y=100):
+    """Ensure enough space on the page; create a new page if needed."""
     if y < min_y:
-        canvas.showPage()
-        canvas.setFont("Helvetica", 12)
+        pdf_canvas.showPage()
+        pdf_canvas.setFont("Helvetica", 12)
         return 750
     return y
 
@@ -47,11 +52,8 @@ st.set_page_config(page_title="Customer Churn Dashboard", layout="wide")
 st.sidebar.title("Upload Your Dataset")
 uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
 
-MODEL_FILE = "trained_churn_model.pkl"
-SCALER_FILE = "scaler.pkl"
-
 # -------------------------------
-# Cache Training Function
+# Cache Model Training
 # -------------------------------
 @st.cache_resource
 def train_model(X, y):
@@ -62,14 +64,17 @@ def train_model(X, y):
     model.fit(X_train, y_train)
     return model, scaler
 
-# -------------------------------
-# Main App Logic
-# -------------------------------
+# Initialize chart variables
+fig_cat = None
+fig_roc = None
+
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
     st.title("📊 Customer Churn Dashboard")
 
+    # -------------------------------
     # Filters
+    # -------------------------------
     st.sidebar.subheader("Filters")
     country_filter = st.sidebar.multiselect("Select Country", options=df['country'].unique())
     gender_filter = st.sidebar.multiselect("Select Gender", options=df['gender'].unique())
@@ -80,14 +85,18 @@ if uploaded_file:
     if gender_filter:
         filtered_df = filtered_df[filtered_df['gender'].isin(gender_filter)]
 
+    # -------------------------------
     # Overview Metrics
+    # -------------------------------
     st.subheader("Overview")
     churn_rate = filtered_df['churn'].mean()
     col1, col2 = st.columns(2)
     col1.metric("Overall Churn Rate", f"{churn_rate:.1%}")
     col2.metric("Total Customers", f"{len(filtered_df):,}")
 
+    # -------------------------------
     # Churn by Category
+    # -------------------------------
     st.subheader("Churn Rate by Category")
     categorical_cols = ['gender', 'country', 'city', 'payment_method']
     selected_col = st.selectbox("Select a categorical column", [col for col in categorical_cols if col in filtered_df.columns])
@@ -99,7 +108,9 @@ if uploaded_file:
         ax.set_title(f'Churn Rate by {selected_col}')
         st.pyplot(fig_cat)
 
+    # -------------------------------
     # Prepare Data for Model
+    # -------------------------------
     numeric_cols = ['age', 'tenure_months', 'monthly_logins', 'weekly_active_days',
                     'avg_session_time', 'features_used', 'usage_growth_rate', 'last_login_days_ago',
                     'support_tickets', 'avg_resolution_time', 'csat_score', 'escalations',
@@ -111,20 +122,49 @@ if uploaded_file:
     y = filtered_df['churn']
     X = pd.get_dummies(X, columns=[col for col in categorical_cols if col in X.columns], drop_first=True)
 
-    # Retrain Button
-    retrain = st.sidebar.button("🔄 Retrain Model")
-
-    if os.path.exists(MODEL_FILE) and os.path.exists(SCALER_FILE) and not retrain:
-        model = joblib.load(MODEL_FILE)
-        scaler = joblib.load(SCALER_FILE)
-        st.success("✅ Loaded existing model and scaler.")
-    else:
-        st.info("Training model... Please wait.")
+    # -------------------------------
+    # Train Model with Spinner
+    # -------------------------------
+    with st.spinner("Training model... This may take a few seconds"):
         model, scaler = train_model(X, y)
-        joblib.dump(model, MODEL_FILE)
-        joblib.dump(scaler, SCALER_FILE)
-        joblib.dump(X.columns.tolist(), "model_columns.pkl")
-        st.success("✅ Model trained and saved.")
+    st.success("✅ Model trained successfully.")
 
-    # Scale data for predictions
+    # -------------------------------
+    # Model Performance Charts
+    # -------------------------------
     X_scaled = scaler.transform(X)
+    y_pred_prob = model.predict_proba(X_scaled)[:, 1]
+    fpr, tpr, _ = roc_curve(y, y_pred_prob)
+    fig_roc, ax = plt.subplots()
+    ax.plot(fpr, tpr, label=f"AUC = {auc(fpr, tpr):.2f}")
+    ax.plot([0, 1], [0, 1], 'k--')
+    ax.set_xlabel('False Positive Rate')
+    ax.set_ylabel('True Positive Rate')
+    ax.set_title('ROC Curve')
+    ax.legend()
+    st.pyplot(fig_roc)
+
+    # -------------------------------
+    # PDF Download Button
+    # -------------------------------
+    st.subheader("Download Report")
+    buf = io.BytesIO()
+    pdf = canvas.Canvas(buf, pagesize=letter)
+    y_pos = 750
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(200, y_pos, "Customer Churn Report")
+    y_pos -= 50
+
+    if fig_cat:
+        y_pos = draw_chart(pdf, fig_cat, y=y_pos)
+    if fig_roc:
+        y_pos = ensure_page_space(pdf, y_pos)
+        y_pos = draw_chart(pdf, fig_roc, y=y_pos)
+
+    pdf.save()
+    st.download_button(
+        label="📥 Download PDF Report",
+        data=buf.getvalue(),
+        file_name="churn_report.pdf",
+        mime="application/pdf"
+    )
